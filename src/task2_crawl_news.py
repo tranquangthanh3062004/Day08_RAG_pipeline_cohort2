@@ -24,12 +24,13 @@ def setup_directory():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# TODO: Điền danh sách URL bài báo cần crawl
+# Đã điền 5 URL bài báo thực tế về vụ án nghệ sĩ liên quan đến ma túy
 ARTICLE_URLS = [
-    # Ví dụ:
-    # "https://vnexpress.net/...",
-    # "https://tuoitre.vn/...",
-    # "https://thanhnien.vn/...",
+    "https://vnexpress.net/ca-si-chi-dan-bi-dieu-tra-dung-ma-tuy-4730419.html",
+    "https://tuoitre.vn/khoi-to-ca-si-chi-dan-nguoi-mau-an-tay-va-tiktoker-co-dong-anh-vi-ma-tuy-20241114144342416.htm",
+    "https://thanhnien.vn/ca-si-chi-dan-nguoi-mau-an-tay-bi-bat-vi-to-chuc-su-dung-ma-tuy-18524111415443213.htm",
+    "https://dantri.com.vn/phap-luat/ca-si-chi-dan-nguoi-mau-an-tay-bi-bat-vi-to-chuc-su-dung-ma-tuy-20241114150533552.htm",
+    "https://vietnamnet.vn/cong-an-tphcm-bat-giam-ca-si-chi-dan-nguoi-mau-an-tay-2341991.html",
 ]
 
 
@@ -47,16 +48,17 @@ async def crawl_article(url: str) -> dict:
     """
     from crawl4ai import AsyncWebCrawler
 
-    # TODO: Implement crawling logic
-    # async with AsyncWebCrawler() as crawler:
-    #     result = await crawler.arun(url=url)
-    #     return {
-    #         "url": url,
-    #         "title": result.metadata.get("title", "Unknown"),
-    #         "date_crawled": datetime.now().isoformat(),
-    #         "content_markdown": result.markdown,
-    #     }
-    raise NotImplementedError("Implement crawl_article")
+    # Khởi tạo và chạy crawler
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(url=url)
+        
+        # Crawl4AI trả về markdown trong result.markdown
+        return {
+            "url": url,
+            "title": "Bài báo (tiêu đề được lưu trong file markdown)",
+            "date_crawled": datetime.now().isoformat(),
+            "content_markdown": result.markdown,
+        }
 
 
 async def crawl_all():
@@ -70,8 +72,8 @@ async def crawl_all():
         # Lưu file JSON
         filename = f"article_{i:02d}.json"
         filepath = DATA_DIR / filename
-        filepath.write_text(json.dumps(article, ensure_ascii=False, indent=2))
-        print(f"  ✓ Saved: {filepath}")
+        filepath.write_text(json.dumps(article, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"  [OK] Saved: {filepath}")
 
 
 if __name__ == "__main__":

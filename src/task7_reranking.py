@@ -26,30 +26,45 @@ def rerank_cross_encoder(
     Returns:
         List of top_k candidates, re-scored và sorted by rerank_score descending.
     """
-    # TODO: Implement cross-encoder reranking
-    #
-    # Option A: Jina Reranker API
-    # import requests
-    # response = requests.post(
-    #     "https://api.jina.ai/v1/rerank",
-    #     headers={"Authorization": f"Bearer {JINA_API_KEY}"},
-    #     json={
-    #         "model": "jina-reranker-v2-base-multilingual",
-    #         "query": query,
-    #         "documents": [c["content"] for c in candidates],
-    #         "top_n": top_k
-    #     }
-    # )
-    # reranked = response.json()["results"]
-    # return [
-    #     {**candidates[r["index"]], "score": r["relevance_score"]}
-    #     for r in reranked
-    # ]
-    #
-    # Option B: Local model (Qwen3-Reranker)
-    # from transformers import AutoModelForSequenceClassification, AutoTokenizer
-    # ...
-    raise NotImplementedError("Implement rerank_cross_encoder")
+    import os
+    import requests
+    from dotenv import load_dotenv
+    from pathlib import Path
+
+    env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(dotenv_path=env_path)
+    api_key = os.environ.get("JINA_API_KEY")
+    if not api_key or api_key == "jina_xxx" or api_key == "":
+        print("⚠ Lỗi: JINA_API_KEY chưa được cấu hình hợp lệ trong file .env")
+        return candidates[:top_k]
+
+    url = "https://api.jina.ai/v1/rerank"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "jina-reranker-v2-base-multilingual",
+        "query": query,
+        "documents": [c["content"] for c in candidates],
+        "top_n": top_k
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        reranked = response.json()["results"]
+
+        result = []
+        for r in reranked:
+            idx = r["index"]
+            item = candidates[idx].copy()
+            item["score"] = r["relevance_score"]
+            result.append(item)
+        return result
+    except Exception as e:
+        print(f"⚠ Lỗi khi gọi Jina AI API: {e}")
+        return candidates[:top_k]
 
 
 def rerank_mmr(
@@ -121,28 +136,25 @@ def rerank_rrf(
     Returns:
         List of top_k candidates sorted by RRF score descending.
     """
-    # TODO: Implement RRF
-    #
-    # rrf_scores = {}  # content -> score
-    # content_map = {}  # content -> full dict
-    #
-    # for ranked_list in ranked_lists:
-    #     for rank, item in enumerate(ranked_list, 1):
-    #         key = item["content"]
-    #         rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank)
-    #         content_map[key] = item
-    #
-    # # Sort by RRF score
-    # sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-    #
-    # results = []
-    # for content, score in sorted_items[:top_k]:
-    #     item = content_map[content].copy()
-    #     item["score"] = score
-    #     results.append(item)
-    #
-    # return results
-    raise NotImplementedError("Implement rerank_rrf")
+    rrf_scores = {}  # content -> score
+    content_map = {}  # content -> full dict
+
+    for ranked_list in ranked_lists:
+        for rank, item in enumerate(ranked_list, 1):
+            key = item["content"]
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1.0 / (k + rank)
+            content_map[key] = item
+
+    # Sort by RRF score
+    sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+
+    results = []
+    for content, score in sorted_items[:top_k]:
+        item = content_map[content].copy()
+        item["score"] = score
+        results.append(item)
+
+    return results
 
 
 # =============================================================================
@@ -180,6 +192,12 @@ def rerank(
 
 
 if __name__ == "__main__":
+    import sys
+    import io
+    # Fix lỗi UnicodeEncodeError khi print tiếng Việt ra console trên Windows
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
     # Test with dummy data
     dummy_candidates = [
         {"content": "Điều 248: Tội tàng trữ trái phép chất ma tuý", "score": 0.8, "metadata": {}},

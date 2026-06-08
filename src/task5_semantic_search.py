@@ -26,40 +26,58 @@ def semantic_search(query: str, top_k: int = 10) -> list[dict]:
         }
         Sorted by score descending.
     """
-    # TODO: Implement semantic search
-    #
-    # Bước 1: Embed query bằng cùng model ở Task 4
-    # Bước 2: Query vector store (cosine similarity)
-    # Bước 3: Return top_k results
-    #
-    # Ví dụ với Weaviate:
-    # import weaviate
-    # from sentence_transformers import SentenceTransformer
-    #
-    # model = SentenceTransformer("BAAI/bge-m3")
-    # query_embedding = model.encode(query).tolist()
-    #
-    # client = weaviate.connect_to_local()
-    # collection = client.collections.get("DrugLawDocs")
-    #
-    # results = collection.query.near_vector(
-    #     near_vector=query_embedding,
-    #     limit=top_k,
-    #     return_metadata=MetadataQuery(distance=True)
-    # )
-    #
-    # return [
-    #     {
-    #         "content": obj.properties["content"],
-    #         "score": 1 - obj.metadata.distance,  # distance → similarity
-    #         "metadata": {"source": obj.properties["source"], ...}
-    #     }
-    #     for obj in results.objects
-    # ]
-    raise NotImplementedError("Implement semantic_search")
+    import chromadb
+    from sentence_transformers import SentenceTransformer
+    from pathlib import Path
+
+    # Khởi tạo model embedding (cùng model ở Task 4)
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    query_embedding = model.encode(query).tolist()
+
+    # Khởi tạo client và lấy collection từ ChromaDB
+    db_path = Path(__file__).parent.parent / "data" / "chroma_db"
+    chroma_client = chromadb.PersistentClient(path=str(db_path))
+    
+    try:
+        collection = chroma_client.get_collection(name="DrugLawDocs")
+    except ValueError:
+        print("⚠ Lỗi: Collection 'DrugLawDocs' chưa tồn tại. Hãy chắc chắn bạn đã chạy xong Task 4.")
+        return []
+
+    # Truy vấn (ChromaDB tự động tính distance tuỳ thuộc config HNSW lúc tạo collection)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k
+    )
+
+    formatted_results = []
+    if results['documents'] and len(results['documents']) > 0:
+        docs = results['documents'][0]
+        metadatas = results['metadatas'][0]
+        distances = results['distances'][0]
+        
+        for doc, meta, dist in zip(docs, metadatas, distances):
+            # Ở Task 4 ta config hnsw:space là cosine, distance của ChromaDB là (1 - cosine_similarity)
+            # Do đó similarity score = 1 - distance
+            score = 1.0 - dist
+            formatted_results.append({
+                "content": doc,
+                "score": score,
+                "metadata": meta
+            })
+            
+    # Đảm bảo sắp xếp theo score giảm dần
+    formatted_results.sort(key=lambda x: x['score'], reverse=True)
+    return formatted_results
 
 
 if __name__ == "__main__":
+    import sys
+    import io
+    # Fix lỗi UnicodeEncodeError khi print tiếng Việt ra console trên Windows
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
     # Test
     results = semantic_search("hình phạt cho tội tàng trữ ma tuý", top_k=5)
     for r in results:
