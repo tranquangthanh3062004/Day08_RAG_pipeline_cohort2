@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: day08-rag-pipeline
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
